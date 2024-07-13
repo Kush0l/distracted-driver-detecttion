@@ -118,6 +118,10 @@ while True:
                     print("Drowsy")
             else:
                 flag = 0
+
+            # Draw the face bounding box
+            (x, y, w, h) = (subject.left(), subject.top(), subject.width(), subject.height())
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
             
             
             
