@@ -14,6 +14,43 @@ predictor = dlib.shape_predictor('model/shape_predictor_68_face_landmarks.dat')
 # video capture from the webcam
 cap = cv2.VideoCapture(0)
 
+# def get_head_orientation(shape):
+#     model_points = np.array([
+#         (0.0, 0.0, 0.0),             # Nose tip
+#         (0.0, -330.0, -65.0),        # Chin
+#         (-225.0, 170.0, -135.0),     # Left eye left corner
+#         (225.0, 170.0, -135.0),      # Right eye right corner
+#         (-150.0, -150.0, -125.0),    # Left Mouth corner
+#         (150.0, -150.0, -125.0)      # Right mouth corner
+#     ], dtype="double")
+
+#     image_points = np.array([
+#         (shape[30][0], shape[30][1]),     # Nose tip
+#         (shape[8][0], shape[8][1]),       # Chin
+#         (shape[36][0], shape[36][1]),     # Left eye left corner
+#         (shape[45][0], shape[45][1]),     # Right eye right corner
+#         (shape[48][0], shape[48][1]),     # Left Mouth corner
+#         (shape[54][0], shape[54][1])      # Right mouth corner
+#     ], dtype="double")
+
+#     size = frame.shape
+#     focal_length = size[1]
+#     center = (size[1] // 2, size[0] // 2)
+#     camera_matrix = np.array([
+#         [focal_length, 0, center[0]],
+#         [0, focal_length, center[1]],
+#         [0, 0, 1]
+#     ], dtype="double")
+
+#     dist_coeffs = np.zeros((4, 1))
+#     success, rotation_vector, translation_vector = cv2.solvePnP(model_points, image_points, camera_matrix, dist_coeffs)
+#     rvec_matrix = cv2.Rodrigues(rotation_vector)[0]
+#     proj_matrix = np.hstack((rvec_matrix, translation_vector))
+#     eulerAngles = cv2.decomposeProjectionMatrix(proj_matrix)[6]
+
+#     pitch, yaw, roll = [eulerAngles[i][0] for i in range(3)]
+#     return pitch, yaw, roll
+
 
 def eye_aspect_ratio(eye):
 	A = distance.euclidean(eye[1], eye[5])
@@ -22,9 +59,12 @@ def eye_aspect_ratio(eye):
 	ear = (A + B) / (2.0 * C)
 	return ear
 
+
+
 thresh = 0.25 # threshold for EAR
 flag = 0  #no. of frames
 frame_check = 25 #maximum threshold
+
 
 while True:
     ret, frame = cap.read()
@@ -36,6 +76,9 @@ while True:
 
     # Detect faces 
     subjects = detector(gray, 0)
+
+    
+    
     for subject in subjects:
             
             # Get the landmarks/parts for the face in the bounding box
@@ -75,7 +118,9 @@ while True:
                     print("Drowsy")
             else:
                 flag = 0
-    
+            
+            
+            
     # Display the output
     cv2.imshow("Infothon", frame) 
 
