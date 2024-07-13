@@ -42,7 +42,7 @@ while True:
         cv2.drawContours(frame, [rightEyeHull], -1, (0, 255, 0), 1)
 
     # Display the output
-    cv2.imshow("Infothon", frame)
+    cv2.imshow("Infothon", frame) 
 
     # Break the loop when 'q' key is pressed
     if cv2.waitKey(1) & 0xFF == ord('q'):
