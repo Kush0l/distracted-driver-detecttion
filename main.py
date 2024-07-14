@@ -1,84 +1,77 @@
-from scipy.spatial import distance
 import cv2
+import numpy as np
 import dlib
 from imutils import face_utils
+from scipy.spatial import distance
 from pygame import mixer
 
+from ear import eye_aspect_ratio
+
+
+# Initialize mixer for alert sound
 mixer.init()
 mixer.music.load('alert.wav')
 
-# Load the detector and predictor
-detector = dlib.get_frontal_face_detector()
+
+
+
+
+# Load YOLO model
+net = cv2.dnn.readNet("yolov3.weights", "yolov3.cfg")
+layer_names = net.getLayerNames()
+output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers().flatten()]
+
+# Load the COCO class labels
+with open("coco.names", "r") as f:
+    classes = [line.strip() for line in f.readlines()]
+
+# Load face detector and shape predictor
+face_detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor('model/shape_predictor_68_face_landmarks.dat')
 
-# video capture from the webcam
+
+
+# Thresholds and frame check for drowsiness detection
+thresh = 0.25
+frame_check = 7
+flag = 0
+face_frame_check = 5
+
+# Initialize the video stream
 cap = cv2.VideoCapture(0)
-
-# def get_head_orientation(shape):
-#     model_points = np.array([
-#         (0.0, 0.0, 0.0),             # Nose tip
-#         (0.0, -330.0, -65.0),        # Chin
-#         (-225.0, 170.0, -135.0),     # Left eye left corner
-#         (225.0, 170.0, -135.0),      # Right eye right corner
-#         (-150.0, -150.0, -125.0),    # Left Mouth corner
-#         (150.0, -150.0, -125.0)      # Right mouth corner
-#     ], dtype="double")
-
-#     image_points = np.array([
-#         (shape[30][0], shape[30][1]),     # Nose tip
-#         (shape[8][0], shape[8][1]),       # Chin
-#         (shape[36][0], shape[36][1]),     # Left eye left corner
-#         (shape[45][0], shape[45][1]),     # Right eye right corner
-#         (shape[48][0], shape[48][1]),     # Left Mouth corner
-#         (shape[54][0], shape[54][1])      # Right mouth corner
-#     ], dtype="double")
-
-#     size = frame.shape
-#     focal_length = size[1]
-#     center = (size[1] // 2, size[0] // 2)
-#     camera_matrix = np.array([
-#         [focal_length, 0, center[0]],
-#         [0, focal_length, center[1]],
-#         [0, 0, 1]
-#     ], dtype="double")
-
-#     dist_coeffs = np.zeros((4, 1))
-#     success, rotation_vector, translation_vector = cv2.solvePnP(model_points, image_points, camera_matrix, dist_coeffs)
-#     rvec_matrix = cv2.Rodrigues(rotation_vector)[0]
-#     proj_matrix = np.hstack((rvec_matrix, translation_vector))
-#     eulerAngles = cv2.decomposeProjectionMatrix(proj_matrix)[6]
-
-#     pitch, yaw, roll = [eulerAngles[i][0] for i in range(3)]
-#     return pitch, yaw, roll
-
-
-def eye_aspect_ratio(eye):
-	A = distance.euclidean(eye[1], eye[5])
-	B = distance.euclidean(eye[2], eye[4])
-	C = distance.euclidean(eye[0], eye[3])
-	ear = (A + B) / (2.0 * C)
-	return ear
-
-
-
-thresh = 0.25 # threshold for EAR
-flag = 0  #no. of frames
-frame_check = 25 #maximum threshold
-
 
 while True:
     ret, frame = cap.read()
     if not ret:
         break
+    height, width, channels = frame.shape
 
-    # converts frame to gery scale
+    # Convert frame to grayscale for face detection
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    subjects = face_detector(gray, 0)
 
-    # Detect faces 
-    subjects = detector(gray, 0)
+# face destraction
+    if len(subjects) == 0:
+        face_flag += 1
+        if face_flag > face_frame_check:
+            # Print error message when no face is detected
+            print("No face detected!")
+            cv2.putText(frame, "****************No face detected!!****************", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.putText(frame, "****************No face detected!!****************", (10, 325), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            # cv2.putText(frame, "No face detected!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+    else:
+        face_flag = 0 
+    
+    # Object detection (mobile phones)
+    blob = cv2.dnn.blobFromImage(frame, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
+    net.setInput(blob)
+    outs = net.forward(output_layers)
 
+    class_ids = []
+    confidences = []
+    boxes = []
     
-    
+
     for subject in subjects:
             
             # Get the landmarks/parts for the face in the bounding box
@@ -121,17 +114,43 @@ while True:
 
             # Draw the face bounding box
             (x, y, w, h) = (subject.left(), subject.top(), subject.width(), subject.height())
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            
-            
-            
-    # Display the output
-    cv2.imshow("Infothon", frame) 
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)    
 
-    # Break the loop when 'q' key is pressed
+    for out in outs:
+        for detection in out:
+            scores = detection[5:]
+            class_id = np.argmax(scores)
+            confidence = scores[class_id]
+            if confidence > 0.5 and class_id == classes.index("cell phone"):
+                center_x = int(detection[0] * width)
+                center_y = int(detection[1] * height)
+                w = int(detection[2] * width)
+                h = int(detection[3] * height)
+                x = int(center_x - w / 2)
+                y = int(center_y - h / 2)
+                boxes.append([x, y, w, h])
+                confidences.append(float(confidence))
+                class_ids.append(class_id)
+
+    indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
+
+
+    
+
+    for i in range(len(boxes)):
+        if i in indexes:
+            box_x, box_y, box_w, box_h = boxes[i]
+            label = str(classes[class_ids[i]])
+            cv2.rectangle(frame, (box_x, box_y), (box_x + box_w, box_y + box_h), (0, 255, 0), 2)
+            cv2.putText(frame, label, (box_x, box_y + 30), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
+        
+        # Check if the mobile phone is near the detected face
+            if (x < box_x < x + w or x < box_x + box_w < x + w) and (y < box_y < y + h or y < box_y + box_h < y + h):
+                cv2.putText(frame, "Using Mobile Phone", (50, 50), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), 2)
+    
+    cv2.imshow('Frame', frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-# Release the capture and close windows
 cap.release()
 cv2.destroyAllWindows()
